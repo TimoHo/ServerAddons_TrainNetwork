@@ -1,0 +1,20 @@
+name: ServerAddons_TrainNetwork
+version: 1.0
+main: me.tmods.serveraddons.TrainNetwork
+
+commands:
+  addTrain:
+    description: add a train
+    usage: /addTrain <Amount of carts> <name>
+  removeTrain:
+    description: remove a train
+    usage: /removetrain <name>
+  organizeStations:
+    description: sort the stations of a train in order of departure
+    usage: /organizeStations <name>
+  getTime:
+    description: get the time
+    usage: /getTime
+  addstation:
+    description: add a station
+    usage: /addstation <trainname>

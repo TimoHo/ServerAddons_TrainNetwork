@@ -1,5 +1,6 @@
 package me.tmods.serveraddons.trainnetwork;
 
+import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
 
@@ -17,6 +18,21 @@ public class Cart {
 		}
 	}
 	
+	public boolean exists() {
+		if (this.e != null) {
+			if (!this.e.isDead()) {
+				return true;
+			}
+		}
+		return false;
+	}
+	public void reload(Location l) {
+		this.e = l.getWorld().spawn(l, Minecart.class);
+	}
+	public void unload() {
+		this.e.remove();
+		this.e = null;
+	}
 	public void boost() {
 		this.e.setVelocity(this.e.getLocation().getDirection().multiply(2));
 	}
