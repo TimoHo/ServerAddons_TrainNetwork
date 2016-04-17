@@ -34,7 +34,8 @@ public class Cart {
 		this.e = null;
 	}
 	public void boost() {
-		this.e.setVelocity(this.e.getLocation().getDirection().multiply(2));
+		//TODO ???
+		throw new UnsupportedOperationException("do you know how to make this cart move?");
 	}
 	
 	public boolean isEmpty() {
