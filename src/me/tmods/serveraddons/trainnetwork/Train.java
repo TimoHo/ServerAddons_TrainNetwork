@@ -1,7 +1,6 @@
 package me.tmods.serveraddons.trainnetwork;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import org.bukkit.Bukkit;
@@ -13,17 +12,18 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
+import me.tmods.api.Serializer;
 import me.tmods.serveraddons.TrainNetwork;
 import me.tmods.serverutils.Methods;
 
 public class Train {
 	private List<Cart> carts;
-	private HashMap<Location,Integer> stations;
+	private List<Station> stations;
 	private ItemStack ticket;
 	private String name;
 	private Location start;
 	private boolean moving = false;
-	public Train(List<Cart> carts,HashMap<Location,Integer> stations,ItemStack ticket,String name,Location start) {
+	public Train(List<Cart> carts,List<Station> stations,ItemStack ticket,String name,Location start) {
 		this.carts = carts;
 		this.stations = stations;
 		this.ticket = ticket;
@@ -45,10 +45,10 @@ public class Train {
 	public Integer getNextDepartureTime() {
 		int nextTime = 999999999;
 		if (this.stations.size() > 0) {
-			for (Location loc:this.stations.keySet()) {
-				if ((this.stations.get(loc) - start.getWorld().getTime()) > 0) {
-					if ((this.stations.get(loc) - start.getWorld().getTime()) < nextTime) {
-						nextTime = (int) (this.stations.get(loc) - start.getWorld().getTime());
+			for (Station s:this.stations) {
+				if ((s.getTime() - start.getWorld().getTime()) > 0) {
+					if ((s.getTime() - start.getWorld().getTime()) < nextTime) {
+						nextTime = (int) (s.getTime() - start.getWorld().getTime());
 					}
 				}
 			}
@@ -59,28 +59,28 @@ public class Train {
 	public World getWorld() {
 		return start.getWorld();
 	}
-	public Location getStationOfDepTime(Integer departureTime) {
+	public Station getStationOfDepTime(Integer departureTime) {
 		if (stations.size() > 0) {
-			for (Location l:stations.keySet()) {
-				if (stations.get(l).equals(departureTime)) {
-					return l;
+			for (Station s:stations) {
+				if (s.getTime() == (departureTime)) {
+					return s;
 				}
 			}
 		}
 		return null;
 	}
-	public HashMap<Location,Integer> getStations() {
+	public List<Station> getStations() {
 		return stations;
 	}
-	public Train addStation(Location s,Integer i) {
-		this.stations.put(s,i);
+	public Train addStation(Station s) {
+		this.stations.add(s);
 		return this;
 	}
 	public Train removeStation(Location s) {
 		this.stations.remove(s);
 		return this;
 	}
-	public Train setStations(HashMap<Location,Integer> s) {
+	public Train setStations(List<Station> s) {
 		this.stations = s;
 		return this;
 	}
@@ -100,22 +100,24 @@ public class Train {
 		c.set(path + ".ticket", this.ticket);
 		c.set(path + ".name", this.name);
 		c.set(path + ".stations", null);
+		List<String> stat = new ArrayList<String>();
 		if (this.stations.size() > 0) {
-			for (Location l:stations.keySet()) {
-				c.set(path + ".stations." + Serializer.serializeLocation(l), stations.get(l));
+			for (Station s:stations) {
+				stat.add(s.serialize());
 			}
 		}
+		c.set(path + ".stations",stat);
 	}
 	public static Train createFromConfig(FileConfiguration c,String path) {
 		Location loc = Serializer.deserializeLocation(c.getString(path + ".start"));
 		Integer cartAmount = c.getInt(path + ".carts");
 		ItemStack ticket = c.getItemStack(path + ".ticket");
-		HashMap<Location,Integer> stations = new HashMap<Location,Integer>();
+		List<Station> stat = new ArrayList<Station>();
 		String name = c.getString(path + ".name");
-		if (c.getConfigurationSection(path + ".stations") != null) {
-			if (c.getConfigurationSection(path + ".stations").getKeys(false).size() > 0) {
-				for (String s:c.getConfigurationSection(path + ".stations").getKeys(false)) {
-					stations.put(Serializer.deserializeLocation(s), c.getInt(path + ".stations." + s));
+		if (c.getStringList(path + ".stations") != null) {
+			if (c.getStringList(path + ".stations").size() > 0) {
+				for (String s:c.getStringList(path + ".stations")) {
+					stat.add(Station.deserialize(s));
 				}
 			}
 		}
@@ -123,7 +125,7 @@ public class Train {
 		for (int i = 0;i < cartAmount;i++) {
 			carts.add(new Cart(loc.getWorld().spawn(loc, Minecart.class)));
 		}
-		Train t = new Train(carts, stations, ticket,name,loc);
+		Train t = new Train(carts, stat, ticket,name,loc);
 		t.realign();
 		return t;
 	}
@@ -160,21 +162,28 @@ public class Train {
 		if (!moving) {
 			moving = true;
 			final Integer[] task = new Integer[1];
+			Station nextStat = getNextStation();
+			if (nextStat != null) {
+				for (Cart c:this.carts) {
+					c.boost(nextStat.getDirection());
+				}
+			}
 			task[0] = Bukkit.getScheduler().scheduleSyncRepeatingTask(TrainNetwork.getThis(), new Runnable() {
 				@Override
 				public void run() {
-					Location nextstat = getNextStation();
+					Station nextstat = getNextStation();
 					if (nextstat == null) {
 						applyBreak();
 						Bukkit.getScheduler().cancelTask(task[0]);
 					}
-					if (carts.get(0).getMinecart().getLocation().distance(nextstat) < 5) {
+					if (carts.get(0).getMinecart().getLocation().distance(nextstat.getLocation()) < 5) {
 						applyBreak();
 						Bukkit.getScheduler().cancelTask(task[0]);
 					} else {
 						if (exists()) {
 							for (Cart c:carts) {
-								c.boost();
+								c.boost(c.getLastTickLoc());
+								c.setLastTickLoc(c.getMinecart().getLocation());
 							}
 						} else {
 							unload();
@@ -185,14 +194,14 @@ public class Train {
 			}, 10, 10);
 		}
 	}
-	public Location getNextStation() {
+	public Station getNextStation() {
 		int nextTime = 999999999;
 		int departureTime = -1;
 		if (this.stations.size() > 0) {
-			for (Location loc:this.stations.keySet()) {
-				if ((this.stations.get(loc) - start.getWorld().getTime()) > 20) {
-					if ((this.stations.get(loc) - start.getWorld().getTime()) < nextTime) {
-						nextTime = (int) (this.stations.get(loc) - start.getWorld().getTime());
+			for (Station s:this.stations) {
+				if ((s.getTime() - start.getWorld().getTime()) > 20) {
+					if ((s.getTime() - start.getWorld().getTime()) < nextTime) {
+						nextTime = (int) (s.getTime() - start.getWorld().getTime());
 					}
 				}
 			}
@@ -201,9 +210,9 @@ public class Train {
 		if(departureTime == -1) {
 			return null;
 		}
-		for (Location l:stations.keySet()) {
-			if (stations.get(l).equals(departureTime)) {
-				return l;
+		for (Station s:stations) {
+			if (s.getTime() == (departureTime)) {
+				return s;
 			}
 		}
 		return null;

@@ -3,11 +3,9 @@ package me.tmods.serveraddons;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -19,6 +17,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import me.tmods.serveraddons.trainnetwork.Cart;
 import me.tmods.serveraddons.trainnetwork.NetworkListener;
+import me.tmods.serveraddons.trainnetwork.Station;
 import me.tmods.serveraddons.trainnetwork.Train;
 import me.tmods.serverutils.Methods;
 public class TrainNetwork extends JavaPlugin{
@@ -94,7 +93,7 @@ public class TrainNetwork extends JavaPlugin{
 			for (int i = 0; i < Integer.valueOf(args[0]);i++) {
 				carts.add(new Cart(((Player) sender).getWorld().spawn(((Player) sender).getLocation(), Minecart.class)));
 			}
-			Train t = new Train(carts,new HashMap<Location,Integer>(),Methods.getItemInHand((Player) sender),args[1],((Player) sender).getLocation());
+			Train t = new Train(carts,new ArrayList<Station>(),Methods.getItemInHand((Player) sender),args[1],((Player) sender).getLocation());
 			t.realign();
 			t.toConfig(traincfg,"trains." + args[1]);
 			try {
@@ -136,7 +135,7 @@ public class TrainNetwork extends JavaPlugin{
 			}
 			for (int i = 0;i < trains.size();i++) {
 				if (trains.get(i).getName().equalsIgnoreCase(args[0])) {
-					trains.set(i, trains.get(i).addStation(((Player) sender).getLocation(), Integer.valueOf(args[1])));
+					trains.set(i, trains.get(i).addStation(new Station(((Player) sender).getLocation(),(int) ((Player) sender).getWorld().getTime(),((Player) sender).getLocation().getDirection())));
 				}
 			}
 			sender.sendMessage("done!");
@@ -178,25 +177,26 @@ public class TrainNetwork extends JavaPlugin{
 			for (int i = 0;i < trains.size();i++) {
 				if (trains.get(i).getName().equalsIgnoreCase(args[0])) {
 					Train t = trains.get(i);
-					HashMap<Location,Integer> unsorted = t.getStations();
-					HashMap<Location,Integer> sorted = new HashMap<Location,Integer>();
+					List<Station> unsorted = t.getStations();
+					List<Station> sorted = new ArrayList<Station>();
 					for (int i1 = 0;i1 < t.getStations().size();i1++) {
 						if (unsorted.size() > 0) {
 							int min = 999999999;
-							for (Integer dep:unsorted.values()) {
+							for (Station s:unsorted) {
+								Integer dep = s.getTime();
 								if (dep < min) {
 									min = dep;
 								}
 							}
-							Location minloc = null;
-							for (Location l:unsorted.keySet()) {
-								if (unsorted.get(l).equals(min)) {
-									minloc = l;
+							Station minstat = null;
+							for (Station s:unsorted) {
+								if (s.getTime() == (min)) {
+									minstat = s;
 									break;
 								}
 							}
-							unsorted.remove(minloc);
-							sorted.put(minloc, min);
+							unsorted.remove(minstat);
+							sorted.add(minstat);
 						} else {
 							break;
 						}
